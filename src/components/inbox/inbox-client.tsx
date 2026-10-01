@@ -149,6 +149,7 @@ export function InboxClient({ channels }: { channels: readonly Channel[] }) {
     },
     onConversationUpdated: () => {
       void refetchConversations();
+      if (selectedIdRef.current) void refetchMessages(selectedIdRef.current);
       // El agente movió de etapa o cambió el handoff: refresca el panel en vivo.
       setDetailRev((v) => v + 1);
     },

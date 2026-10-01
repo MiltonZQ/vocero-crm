@@ -8,6 +8,7 @@ import {
   getCredentialsByOrg,
   type Credentials,
 } from "@/server/whatsapp/credentials";
+import { handleAudioAssetTranscription } from "@/server/ai/transcribe";
 
 /**
  * 008 — Única frontera de media con la Graph API (constitución II: todo el
@@ -220,6 +221,16 @@ export async function ensureAssetAvailable(
       })
       .where(eq(schema.mediaAsset.id, assetId))
       .returning();
+
+    if (asset.kind === "audio") {
+      void handleAudioAssetTranscription(
+        organizationId,
+        assetId,
+        data,
+        asset.mimeType ?? mimeType
+      ).catch(() => {});
+    }
+
     return updated[0] ?? null;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

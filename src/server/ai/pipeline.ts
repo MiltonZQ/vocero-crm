@@ -19,6 +19,8 @@ import { buildAgentSystemPrompt } from "@/server/ai/prompts";
 import { agendaEnabled } from "@/server/agenda/flag";
 import { bookSlot, offerSlots } from "@/server/agenda/agent";
 import { getOffers, mapaDeHuecosParaModelo } from "@/server/agenda/offers";
+import { readMediaFile } from "@/server/whatsapp/media";
+import { transcribeAudio } from "@/server/ai/transcribe";
 
 /**
  * Turno del agente (FR-021..FR-025).
@@ -128,6 +130,35 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   history.reverse();
   const lastInbound = [...history].reverse().find((m) => m.direction === "in");
   if (!lastInbound) return;
+
+  if (
+    lastInbound.type === "audio" &&
+    !lastInbound.text &&
+    lastInbound.mediaAssetId
+  ) {
+    try {
+      const assetRows = await db
+        .select()
+        .from(schema.mediaAsset)
+        .where(eq(schema.mediaAsset.id, lastInbound.mediaAssetId))
+        .limit(1);
+      const asset = assetRows[0];
+      if (asset && asset.storagePath) {
+        const data = await readMediaFile(organizationId, asset.id);
+        const transcript = await transcribeAudio(data, asset.mimeType);
+        if (transcript) {
+          const formatted = `[Nota de voz]: ${transcript}`;
+          lastInbound.text = formatted;
+          await db
+            .update(schema.message)
+            .set({ text: formatted })
+            .where(eq(schema.message.id, lastInbound.id));
+        }
+      }
+    } catch (err) {
+      console.warn("[agente] no se pudo transcribir audio entrante on-demand:", err);
+    }
+  }
 
   // Ventana cerrada: el agente JAMÁS envía texto libre → handoff 'ventana'.
   if (!conversation.isTest && !isWindowOpen(conversation.lastInboundAt)) {

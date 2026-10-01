@@ -242,6 +242,11 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                         {m.media.caption}
                       </span>
                     )}
+                    {m.text && (
+                      <span className="mt-1.5 block whitespace-pre-wrap break-words text-text-2 text-[13px]">
+                        {m.text}
+                      </span>
+                    )}
                   </span>
                 ) : m.type === "text" || m.type === "template" ? (
                   <span className="whitespace-pre-wrap break-words">
