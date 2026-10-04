@@ -4,7 +4,7 @@ import {
   agentActionSchema,
   degradeAction,
 } from "@/server/ai/actions";
-import { buildAgentSystemPrompt } from "@/server/ai/prompts";
+import { buildAgentSystemPrompt, JSON_REMINDER } from "@/server/ai/prompts";
 
 /**
  * 015 — El agente prometía horarios que nunca llegaban.
@@ -83,5 +83,12 @@ describe("reglas del prompt con agenda", () => {
   it("sin agenda, no habla de horarios", () => {
     const sin = buildAgentSystemPrompt({ profile, kb: [], stages: [], agenda: false });
     expect(sin).not.toContain("offer_slots");
+  });
+});
+
+describe("recordatorio de formato", () => {
+  it("exige JSON puro y explica por qué el historial es texto plano", () => {
+    expect(JSON_REMINDER).toContain("ÚNICAMENTE el objeto JSON");
+    expect(JSON_REMINDER).toContain("texto plano");
   });
 });

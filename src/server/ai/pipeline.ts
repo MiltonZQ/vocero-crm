@@ -15,7 +15,7 @@ import {
   type AgentActionType,
 } from "@/server/ai/actions";
 import { matchesHandoffIntent } from "@/server/ai/handoff";
-import { buildAgentSystemPrompt } from "@/server/ai/prompts";
+import { buildAgentSystemPrompt, JSON_REMINDER } from "@/server/ai/prompts";
 import { agendaEnabled } from "@/server/agenda/flag";
 import { bookSlot, offerSlots } from "@/server/agenda/agent";
 import { getOffers, mapaDeHuecosParaModelo } from "@/server/agenda/offers";
@@ -226,6 +226,12 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     ...(mapaDeHuecos
       ? [{ role: "system" as const, content: mapaDeHuecos }]
       : []),
+    /**
+     * El formato se recuerda AL FINAL. En el historial, los turnos del agente
+     * van como texto plano; en conversaciones largas el modelo imitaba ese
+     * estilo, respondía prosa los tres intentos y el turno caía en handoff.
+     */
+    { role: "system" as const, content: JSON_REMINDER },
   ];
 
   const result = await chatJson(agentActionSchema(agenda), messages);

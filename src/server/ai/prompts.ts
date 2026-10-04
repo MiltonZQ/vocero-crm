@@ -6,6 +6,13 @@ type KbEntry = typeof schema.kbEntry.$inferSelect;
 /** Marcador del prompt del juez: el ai-mock lo usa para despachar veredictos. */
 export const JUDGE_MARKER = "[JUEZ]";
 
+/**
+ * Cierre de cada turno del agente: el historial trae las respuestas previas
+ * como texto plano, y sin este recordatorio el modelo tiende a imitarlas.
+ */
+export const JSON_REMINDER =
+  "RECORDATORIO DE FORMATO: responde ÚNICAMENTE el objeto JSON con UNA acción, como se definió arriba. Tus mensajes anteriores aparecen como texto plano solo por cómo se guarda el historial; tú SIEMPRE respondes JSON puro, sin texto antes ni después.";
+
 export function renderKb(entries: KbEntry[]): string {
   if (entries.length === 0) return "(knowledge base vacío)";
   return entries
