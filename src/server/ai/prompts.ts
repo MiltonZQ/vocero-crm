@@ -36,7 +36,7 @@ export function buildAgentSystemPrompt(input: {
   const stageNames = input.stages.map((s) => s.name).join(" | ");
   const agendaLines = input.agenda
     ? [
-        '- {"action":"offer_slots","reply":"..."} — ofrecer horarios para agendar (reply es solo la frase de entrada; los horarios los pone el sistema).',
+        '- {"action":"offer_slots","reply":"...","note":"..."} — ofrecer horarios para agendar (reply es solo la frase de entrada; los horarios los pone el sistema; note opcional guarda datos del lead en el mismo turno).',
         '- {"action":"book_slot","startUtc":"<uno de los horarios que el sistema ofreció, en ISO UTC>","reply":"..."} — agendar el horario que el cliente eligió.',
       ]
     : [];
@@ -44,6 +44,8 @@ export function buildAgentSystemPrompt(input: {
     ? [
         "- NUNCA escribas tú los horarios ni los inventes: usa offer_slots y el sistema pega los reales.",
         "- book_slot solo acepta un horario que el sistema ofreció antes en ESTA conversación. Si el cliente pide otro, vuelve a ofrecer con offer_slots.",
+        "- NUNCA prometas horarios en un reply, update_lead o move_stage (\"te comparto los horarios\"): ahí el sistema no pega nada. Si toca ofrecer, usa offer_slots; si además el cliente te dio datos (nombre, correo), guárdalos en su note.",
+        "- NUNCA digas que la confirmación, la invitación o el enlace llegarán por correo: la cita se confirma y el enlace se entrega SOLO por este chat.",
         "- Si el cliente quiere CANCELAR una cita → handoff: esa decisión no es tuya.",
       ]
     : [];

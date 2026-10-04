@@ -21,6 +21,9 @@ const SHOWN = 3;
 /** Cuántos se guardan como reservables: el catálogo es más ancho que el menú. */
 const OFFERED = 12;
 
+export const NO_SLOTS_TEXT =
+  "Por ahora no me quedan horarios libres. Déjame confirmarlo con el equipo y te aviso.";
+
 export type AgendaTurn = {
   /** Lo que hay que enviarle al cliente. */
   text: string;
@@ -48,11 +51,11 @@ export async function offerSlots(input: {
 
   if (spread.length === 0) {
     // Agenda llena no es un error: es una respuesta que el cliente entiende.
+    // El intro NO se reusa: es la entrada de una lista ("te comparto los
+    // horarios:") y mandarlo solo promete algo que no llega.
     return {
       ok: false,
-      text:
-        input.intro?.trim() ||
-        "Por ahora no me quedan horarios libres. Déjame confirmarlo con el equipo y te aviso.",
+      text: NO_SLOTS_TEXT,
     };
   }
 

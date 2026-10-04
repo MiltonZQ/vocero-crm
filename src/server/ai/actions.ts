@@ -34,11 +34,17 @@ const baseActions = [
  * los pega el motor con las etiquetas reales. Y `startUtc` tiene que ser
  * exactamente uno de los que el sistema ofreció — si no, el motor lo rechaza y
  * se re-ofrece.
+ *
+ * `note` existe porque el turno es UNA acción: cuando el cliente entrega sus
+ * datos y toca ofrecer, el modelo elegía `update_lead` y su reply prometía
+ * "te comparto los horarios" sin que el motor llegara a pegarlos. Con la nota
+ * aquí, guardar y ofrecer caben en el mismo turno.
  */
 const agendaActions = [
   z.object({
     action: z.literal("offer_slots"),
     reply: z.string().optional(),
+    note: z.string().optional(),
   }),
   z.object({
     action: z.literal("book_slot"),
@@ -75,13 +81,20 @@ export function resolveStage(
   return stages.find((s) => s.name.toLowerCase() === lower) ?? null;
 }
 
+/**
+ * Texto cuando la agenda no pudo ejecutarse. El reply del modelo NO sirve aquí:
+ * en offer_slots es la entrada de una lista que no existe ("te comparto los
+ * horarios:") y en book_slot confirma una cita que no se creó.
+ */
+export const AGENDA_UNAVAILABLE_TEXT =
+  "No pude consultar la agenda en este momento. Lo reviso con el equipo y te confirmo por aquí.";
+
 /** Degrada una acción que no se pudo ejecutar (FR-021 / contrato ai.md). */
 export function degradeAction(action: AgentActionType): AgentActionType {
-  if (
-    action.action === "move_stage" ||
-    action.action === "offer_slots" ||
-    action.action === "book_slot"
-  ) {
+  if (action.action === "offer_slots" || action.action === "book_slot") {
+    return { action: "reply", text: AGENDA_UNAVAILABLE_TEXT };
+  }
+  if (action.action === "move_stage") {
     return action.reply
       ? { action: "reply", text: action.reply }
       : { action: "none" };

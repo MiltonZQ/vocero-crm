@@ -245,6 +245,11 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     if (!agenda) {
       action = degradeAction(action);
     } else {
+      // La nota va ANTES del motor: los datos del cliente no deben perderse
+      // porque la agenda falle.
+      if (action.action === "offer_slots" && action.note?.trim()) {
+        await appendLeadNote(organizationId, conversation.contactId, action.note);
+      }
       try {
         const turn =
           action.action === "offer_slots"
