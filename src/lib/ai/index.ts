@@ -15,7 +15,23 @@ export type ChatMessage = {
 
 export type ChatJsonResult<T> =
   | { ok: true; data: T; raw: string }
-  | { ok: false; error: "not_configured" | "provider_error" | "invalid_output"; detail: string };
+  | {
+      ok: false;
+      error: "not_configured" | "provider_error" | "invalid_output";
+      detail: string;
+      /**
+       * Último texto crudo del modelo cuando NINGÚN intento produjo JSON
+       * extraíble (prosa pura). No se llena si el JSON no cumplía el esquema
+       * ni si falló el proveedor.
+       */
+      lastRaw?: string;
+    };
+
+/**
+ * Modelos cuyo proveedor rechazó `response_format` (HTTP 400). Se recuerdan
+ * para no repetir la petición fallida en las llamadas siguientes.
+ */
+const noJsonModeModels = new Set<string>();
 
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 500;
@@ -47,6 +63,7 @@ export async function chatJson<T>(
   }
 
   let lastDetail = "";
+  let lastRaw: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const attemptMessages: ChatMessage[] =
       attempt === 1
@@ -60,9 +77,11 @@ export async function chatJson<T>(
             },
           ];
     try {
+      lastRaw = undefined;
       const raw = await callProvider(model, attemptMessages, opts?.timeoutMs);
       const extracted = extractJson(raw);
       if (extracted === null) {
+        lastRaw = raw;
         lastDetail = `sin JSON extraíble (raw=${truncate(raw)})`;
         continue;
       }
@@ -88,6 +107,7 @@ export async function chatJson<T>(
       ? "invalid_output"
       : "provider_error",
     detail: lastDetail,
+    ...(lastRaw !== undefined ? { lastRaw } : {}),
   };
 }
 
@@ -100,19 +120,44 @@ async function callProvider(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${env.OPENROUTER_BASE_URL}/v1/chat/completions`, {
-      method: "POST",
-      headers: {
-        // El token jamás se loguea; solo viaja en este header.
-        Authorization: `Bearer ${env.OPENROUTER_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model, messages }),
-      signal: controller.signal,
-    });
+    const send = (jsonMode: boolean) =>
+      fetch(`${env.OPENROUTER_BASE_URL}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          // El token jamás se loguea; solo viaja en este header.
+          Authorization: `Bearer ${env.OPENROUTER_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+        }),
+        signal: controller.signal,
+      });
+
+    const useJsonMode = !noJsonModeModels.has(model);
+    let res = await send(useJsonMode);
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`proveedor respondió ${res.status}: ${truncate(text)}`);
+      // Algunos proveedores OpenRouter-compatibles rechazan `response_format`:
+      // se reintenta UNA vez sin él y se recuerda el modelo.
+      if (
+        useJsonMode &&
+        res.status === 400 &&
+        /response_format/i.test(text)
+      ) {
+        noJsonModeModels.add(model);
+        res = await send(false);
+        if (!res.ok) {
+          const retryText = await res.text().catch(() => "");
+          throw new Error(
+            `proveedor respondió ${res.status}: ${truncate(retryText)}`
+          );
+        }
+      } else {
+        throw new Error(`proveedor respondió ${res.status}: ${truncate(text)}`);
+      }
     }
     const json = (await res.json()) as {
       choices?: { message?: { content?: string } }[];
@@ -150,6 +195,11 @@ export function extractJson(raw: string): unknown | null {
     }
   }
   return null;
+}
+
+/** Solo para pruebas: olvida los modelos que rechazaron `response_format`. */
+export function __resetJsonModeMemory(): void {
+  noJsonModeModels.clear();
 }
 
 function truncate(s: string, n = 300): string {

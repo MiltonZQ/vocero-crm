@@ -15,6 +15,7 @@ import {
   type AgentActionType,
 } from "@/server/ai/actions";
 import { matchesHandoffIntent } from "@/server/ai/handoff";
+import { usableProse } from "@/server/ai/prose";
 import { buildAgentSystemPrompt, JSON_REMINDER } from "@/server/ai/prompts";
 import { agendaEnabled } from "@/server/agenda/flag";
 import { bookSlot, offerSlots } from "@/server/agenda/agent";
@@ -237,6 +238,15 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   const result = await chatJson(agentActionSchema(agenda), messages);
   if (!result.ok) {
     if (result.error === "not_configured") return;
+    // El modelo contestó prosa en todos los intentos: si es presentable se
+    // envía como respuesta normal (mismo camino que `reply`) en vez de callar
+    // al cliente con un handoff.
+    const prose = result.lastRaw ? usableProse(result.lastRaw) : null;
+    if (prose) {
+      console.warn(`[agente] salida en prosa, se envía como respuesta: ${prose.slice(0, 200)}`);
+      await deliverReply(conversation, prose);
+      return;
+    }
     // Fallo persistente del proveedor o salida imposible → escalar (FR-022).
     console.error(`[agente] fallo del proveedor (raw): ${result.detail}`);
     await applyHandoff(conversationId, organizationId, "error");
